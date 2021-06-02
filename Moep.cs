@@ -64,6 +64,12 @@ namespace Bot_Dotnet
         {
             System.Console.WriteLine($@"{DateTime.Now.ToString()} – Message in {e.Message.Chat.Title} / {e.Message.Chat.Id} from {e.Message.From.Username}: {e.Message.Text} ");
 
+            if (e.Message.Type != Telegram.Bot.Types.Enums.MessageType.Text)
+            {
+                System.Console.WriteLine("No text message, aborting …");
+                return;
+            }
+
             int triggerId = this.SearchTriggerInMessage(e.Message.Text) ?? 0;
             if (triggerId == 0) return;
 
