@@ -12,7 +12,7 @@ namespace Bot_Dotnet
     public class Moep
     {
         private TelegramBotClient botClient;
-        private string telegramApiToken;
+        private readonly string telegramApiToken;
         private List<Triggers> triggers;
         private string databaseFileName;
         public SqliteConnection databaseConnection;
@@ -33,8 +33,8 @@ namespace Bot_Dotnet
 
         public void Init()
         {
-            this.databaseConnection = this.openDatabaseConnection(databaseFileName);
-            this.triggers = getTriggers();
+            this.databaseConnection = this.OpenDatabaseConnection(databaseFileName);
+            this.triggers = GetTriggers();
         }
 
         public void InitTelegramClient()
@@ -62,7 +62,7 @@ namespace Bot_Dotnet
 
         private async void HandleIncomingMessage(object sender, MessageEventArgs e)
         {
-            System.Console.WriteLine($@"{DateTime.Now.ToString()} – Message in {e.Message.Chat.Title} / {e.Message.Chat.Id} from {e.Message.From.Username}: {e.Message.Text} ");
+            System.Console.WriteLine($"{DateTime.Now} – Message in {e.Message.Chat.Title} / {e.Message.Chat.Id} from {e.Message.From.Username}: {e.Message.Text} ");
 
             if (e.Message.Type != Telegram.Bot.Types.Enums.MessageType.Text)
             {
@@ -109,14 +109,14 @@ namespace Bot_Dotnet
 
             return result.FirstOrDefault().answer;
         }
-        private List<Triggers> getTriggers()
+        private List<Triggers> GetTriggers()
         {
             var result = this.databaseConnection.Query<Triggers>("SELECT id, searchstring FROM Triggers").AsList();
 
             return result;
         }
 
-        private SqliteConnection openDatabaseConnection(string filename)
+        private SqliteConnection OpenDatabaseConnection(string filename)
         {
             var connection = new SqliteConnection($"Data Source={filename}");
             connection.Open();
