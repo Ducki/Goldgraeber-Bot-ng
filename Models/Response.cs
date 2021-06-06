@@ -5,11 +5,11 @@ using System.Collections.Generic;
 
 namespace Bot_Dotnet
 {
-    public partial class Answer
+    public partial class Response
     {
         public long Id { get; set; }
         public long? TriggerId { get; set; }
-        public string Answer1 { get; set; }
+        public string ResponseText { get; set; }
 
         public virtual Trigger Trigger { get; set; }
     }

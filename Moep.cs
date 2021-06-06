@@ -93,7 +93,7 @@ namespace Bot_Dotnet
              dump all the rows with the matching trigger id
              in a list and shuffle client side.
 
-             Better solution: create a view in the database
+             TODO: Better solution: create a view in the database
              in order to use the database native random function
              for returning the response
              */

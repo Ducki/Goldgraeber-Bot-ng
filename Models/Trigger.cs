@@ -9,12 +9,12 @@ namespace Bot_Dotnet
     {
         public Trigger()
         {
-            Answers = new HashSet<Answer>();
+            Responses = new HashSet<Response>();
         }
 
         public long Id { get; set; }
         public string Searchstring { get; set; }
 
-        public virtual ICollection<Answer> Answers { get; set; }
+        public virtual ICollection<Response> Responses { get; set; }
     }
 }

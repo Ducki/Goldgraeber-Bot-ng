@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
+
 namespace Bot_Dotnet
 {
     class Program
@@ -8,7 +9,19 @@ namespace Bot_Dotnet
         static void Main(string[] args)
         {
             // dotnet publish -r linux-arm -c Release -p:PublishSingleFile=true --self-contained true -p:PublishTrimmed=true -p:InvariantGlobalization=true
-            Moep moep = new(args[0], "text.sqlite");
+            string token;
+
+            if (args.Length == 0)
+            {
+                System.Console.WriteLine("No token supplied.");
+                return;
+            }
+            else
+            {
+                token = args[0];
+            }
+
+            Moep moep = new(token, "text.sqlite");
 
             moep.Init();
             moep.InitTelegramClient();
