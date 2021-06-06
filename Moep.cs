@@ -1,11 +1,8 @@
 using System.Linq;
-using System.Collections.Generic;
 using System;
-using Microsoft.Data.Sqlite;
 using Telegram.Bot;
 using Telegram.Bot.Args;
-using Dapper;
-using Bot_Dotnet.Models;
+using System.Security.Cryptography;
 
 namespace Bot_Dotnet
 {
@@ -13,9 +10,8 @@ namespace Bot_Dotnet
     {
         private TelegramBotClient botClient;
         private readonly string telegramApiToken;
-        private List<Triggers> triggers;
-        private string databaseFileName;
-        public SqliteConnection databaseConnection;
+        private readonly string databaseFileName;
+        public textContext databaseConnection;
 
         public Moep(string telegramApiToken, string databaseFileName)
         {
@@ -33,13 +29,12 @@ namespace Bot_Dotnet
 
         public void Init()
         {
-            //this.databaseConnection = this.OpenDatabaseConnection(databaseFileName);
-            this.triggers = GetTriggers();
+            this.databaseConnection = new textContext();
         }
 
         public void InitTelegramClient()
         {
-            this.botClient = new TelegramBotClient(telegramApiToken);
+            this.botClient = new TelegramBotClient(this.telegramApiToken);
         }
 
         public void StartBot()
@@ -79,12 +74,12 @@ namespace Bot_Dotnet
 
         private int? SearchTriggerInMessage(string message)
         {
-            foreach (var item in this.triggers)
+            foreach (var item in this.databaseConnection.Triggers)
             {
-                if (message.ToLower().Contains(item.searchstring))
+                if (message.ToLower().Contains(item.Searchstring))
                 {
-                    System.Console.WriteLine($"found trigger {item.searchstring}");
-                    return item.id;
+                    System.Console.WriteLine($"Found trigger {item.Searchstring}");
+                    return ((int)item.Id);
                 }
             }
 
@@ -93,35 +88,24 @@ namespace Bot_Dotnet
 
         private string GetRandomAnswerByTriggerId(int triggerId)
         {
-            var result = this.databaseConnection.
-            Query<Answers>(@"SELECT
-                                 answer
-                             FROM
-                                 Triggers
-                             JOIN
-                                 Answers
-                             ON (Answers.trigger_id=Triggers.id)
-                             WHERE
-                                 trigger_id = @id
-                             ORDER BY random()
-                             LIMIT 1"
-                            , new { id = triggerId });
+            /*
+             Quick&dirty solution:
+             dump all the rows with the matching trigger id
+             in a list and shuffle client side.
 
-            return result.FirstOrDefault().answer;
-        }
-        private List<Triggers> GetTriggers()
-        {
-            var result = this.databaseConnection.Query<Triggers>("SELECT id, searchstring FROM Triggers").AsList();
+             Better solution: create a view in the database
+             in order to use the database native random function
+             for returning the response
+             */
 
-            return result;
+            var responsesRaw = this.databaseConnection.Responses.Where(r => r.TriggerId == triggerId).ToList();
+            var randomResultId = (new Random()).Next(responsesRaw.Count);
+            var result = responsesRaw[randomResultId];
+
+            System.Console.WriteLine($"Got trigger id {triggerId}, returning response id {result.Id}");
+
+            return result.ResponseText;
         }
 
-        private SqliteConnection OpenDatabaseConnection(string filename)
-        {
-            var connection = new SqliteConnection($"Data Source={filename}");
-            connection.Open();
-
-            return connection;
-        }
     }
 }
