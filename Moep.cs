@@ -33,7 +33,7 @@ namespace Bot_Dotnet
 
         public void Init()
         {
-            this.databaseConnection = this.OpenDatabaseConnection(databaseFileName);
+            //this.databaseConnection = this.OpenDatabaseConnection(databaseFileName);
             this.triggers = GetTriggers();
         }
 
