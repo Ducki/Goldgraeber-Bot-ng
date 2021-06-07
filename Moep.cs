@@ -3,6 +3,8 @@ using System;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using System.Security.Cryptography;
+using Telegram.Bot.Types;
+using System.Text;
 
 namespace Bot_Dotnet
 {
@@ -12,6 +14,7 @@ namespace Bot_Dotnet
         private readonly string telegramApiToken;
         private readonly string databaseFileName;
         public textContext databaseConnection;
+        private Message lastSentMessage;
 
         public Moep(string telegramApiToken, string databaseFileName)
         {
@@ -46,9 +49,18 @@ namespace Bot_Dotnet
 
             while (true)
             {
-                if (Console.ReadLine() == "quit")
+                string line = Console.ReadLine();
+                if (line == "quit")
                 {
                     break;
+                }
+
+                // Debug stuff:
+                if (line.StartsWith("/append"))
+                {
+                    System.Console.WriteLine("Appending …");
+                    this.AppendToMessage(this.lastSentMessage, "moep!");
+                    continue;
                 }
             }
 
@@ -69,7 +81,11 @@ namespace Bot_Dotnet
             if (triggerId == 0) return;
 
             string answer = GetRandomAnswerByTriggerId(triggerId);
-            await this.botClient.SendTextMessageAsync(e.Message.Chat, answer);
+            Message message = await this.botClient.SendTextMessageAsync(e.Message.Chat, answer);
+            this.lastSentMessage = message;
+
+            // note for upcoming transscription of voice messages:
+            // https://github.com/TelegramBots/Telegram.Bot/blob/78e2573ca612270a6f29df8e4db3d10867ba859a/test/Telegram.Bot.Tests.Integ/Other/FileDownloadTests.cs#L79
         }
 
         private int? SearchTriggerInMessage(string message)
@@ -105,6 +121,23 @@ namespace Bot_Dotnet
             System.Console.WriteLine($"Got trigger id {triggerId}, returning response id {result.Id}");
 
             return result.ResponseText;
+        }
+
+        private async void AppendToMessage(Message message, string text)
+        {
+
+            var newMessage = new StringBuilder(message.Text);
+            newMessage.AppendLine("*moep!* _nech wahr_");
+
+            this.lastSentMessage.Text = newMessage.ToString();
+
+            Message editedMessage = await this.botClient.EditMessageTextAsync(
+                chatId: message.Chat.Id,
+                messageId: message.MessageId,
+                text: newMessage.ToString(),
+                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown
+            );
+
         }
 
     }
