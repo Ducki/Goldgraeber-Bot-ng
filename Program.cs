@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 
 namespace Bot_Dotnet
 {
@@ -7,6 +8,8 @@ namespace Bot_Dotnet
         static void Main(string[] args)
         {
             // dotnet publish -r linux-arm -c Release -p:PublishSingleFile=true --self-contained true -p:PublishTrimmed=true -p:InvariantGlobalization=true
+            CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("de-DE");
+
             string token;
 
             if (args.Length == 0)

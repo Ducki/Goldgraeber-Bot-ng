@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="5.0.6" />
     <PackageReference Include="Telegram.Bot" Version="15.7.1" />
     <PackageReference Include="Google.Cloud.Speech.V1" Version="2.2.0" />
+    <PackageReference Include="Google.Api.Gax.Grpc.GrpcNetClient" Version="3.3.0" />
   </ItemGroup>
 
 </Project>

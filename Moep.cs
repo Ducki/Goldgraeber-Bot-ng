@@ -3,7 +3,6 @@ using System;
 using System.IO;
 using Telegram.Bot;
 using Telegram.Bot.Args;
-using System.Security.Cryptography;
 using Telegram.Bot.Types;
 using System.Text;
 using Telegram.Bot.Types.Enums;
@@ -12,6 +11,7 @@ using System.Threading.Tasks;
 using Google.Cloud.Speech.V1;
 using Google.LongRunning;
 using System.Globalization;
+using Google.Api.Gax.Grpc.GrpcNetClient;
 
 namespace Bot_Dotnet
 {
@@ -51,6 +51,7 @@ namespace Bot_Dotnet
             this.botClient.StartReceiving();
 
             Console.WriteLine("Listening to messages. Type quit to exit.");
+            Console.WriteLine($"Culture: {Thread.CurrentThread.CurrentCulture}");
 
             while (true)
             {
@@ -63,15 +64,23 @@ namespace Bot_Dotnet
                 // Debug stuff:
                 if (line.StartsWith("/append"))
                 {
-                    System.Console.WriteLine("Appending …");
+                    Console.WriteLine("Appending …");
                     this.AppendToMessage(this.lastSentMessage, "moep!");
                     continue;
                 }
 
-                if (line.StartsWith("/processvoice"))
+                if (line.StartsWith("/say"))
                 {
+                    string[] words = line.Split(' ');
+                    Console.WriteLine(String.Join(' ', words));
 
-                    //this.ProcessVoiceMessage();
+                    var cid = new ChatId(Int32.Parse(words[1]));
+                    string msg = line[(5 + words[1].Length)..];
+                    Console.WriteLine(Int32.Parse(words[1]));
+                    Console.WriteLine(msg);
+
+                    _ = this.botClient.SendTextMessageAsync(cid, msg);
+
                     continue;
                 }
             }
@@ -81,9 +90,7 @@ namespace Bot_Dotnet
 
         private async void HandleIncomingMessage(object sender, MessageEventArgs e)
         {
-            System.Console.WriteLine($"{DateTime.Now} – Message in {e.Message.Chat.Title} / {e.Message.Chat.Id} from {e.Message.From.Username}: {e.Message.Text} ");
-
-            // convert to switch
+            Console.WriteLine($"{DateTime.Now} – Message in {e.Message.Chat.Title} / {e.Message.Chat.Id} from {e.Message.From.Username}: {e.Message.Text} ");
 
             switch (e.Message.Type)
             {
@@ -95,7 +102,7 @@ namespace Bot_Dotnet
                     await this.ProcessVoiceMessage(e.Message);
                     break;
                 default:
-                    System.Console.WriteLine("No text message, aborting …");
+                    Console.WriteLine("No text message, aborting …");
                     return;
             }
         }
@@ -113,18 +120,10 @@ namespace Bot_Dotnet
 
         private async Task ProcessVoiceMessage(Message message)
         {
-            /*
-                1. get file id: message.Voice.FileId
-                2. get temp file name: Path.GetTempFileName
-                3. Download file https://github.com/TelegramBots/Telegram.Bot/blob/78e2573ca612270a6f29df8e4db3d10867ba859a/test/Telegram.Bot.Tests.Integ/Other/FileDownloadTests.cs#L79
-                4. create google cloud voice api client
-                5. upload file
-                6. wait for callback
-                7. send transcribed text
-            */
             var pathForTempFile = Path.GetTempFileName();
-            System.Console.WriteLine($"temp file: {pathForTempFile}");
-            System.Console.WriteLine($"File name: {message.Voice.FileId}");
+
+            Console.WriteLine($"temp file: {pathForTempFile}");
+            Console.WriteLine($"File name: {message.Voice.FileId}");
 
             using (FileStream fileStream = System.IO.File.OpenWrite(pathForTempFile))
             {
@@ -135,11 +134,11 @@ namespace Bot_Dotnet
 
             }
 
-            this.botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
+            _ = this.botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
 
             string transcript = this.CallCloudApi(pathForTempFile);
 
-            await this.botClient.SendTextMessageAsync(message.Chat,
+            _ = await this.botClient.SendTextMessageAsync(message.Chat,
                                                 transcript,
                                                 parseMode: ParseMode.Markdown,
                                                 replyToMessageId: message.MessageId);
@@ -149,9 +148,14 @@ namespace Bot_Dotnet
 
         private string CallCloudApi(string path)
         {
-            System.Console.WriteLine("Baue Verbindung auf …");
+            Console.WriteLine("Baue Verbindung auf …");
 
-            SpeechClient speechClient = SpeechClient.Create();
+            // Need to specifically depend on the .net client
+            // because gRPC.Core has no binary for linux-arm
+            SpeechClient speechClient = new SpeechClientBuilder()
+            {
+                GrpcAdapter = GrpcNetClientAdapter.Default
+            }.Build();
 
             LongRunningRecognizeRequest request = new()
             {
@@ -169,24 +173,24 @@ namespace Bot_Dotnet
                 Audio = RecognitionAudio.FromFile(path),
             };
 
-            System.Console.WriteLine("Lade Memo hoch …");
+            Console.WriteLine("Lade Memo hoch …");
 
             Operation<LongRunningRecognizeResponse, LongRunningRecognizeMetadata> response = speechClient.LongRunningRecognize(request);
 
-            System.Console.WriteLine("Warte auf Texterkennung …");
+            Console.WriteLine("Warte auf Texterkennung …");
 
             Operation<LongRunningRecognizeResponse, LongRunningRecognizeMetadata> completedResponse = response.PollUntilCompleted();
             LongRunningRecognizeResponse result = completedResponse.Result;
 
-            System.Console.WriteLine("Fertig.");
+            Console.WriteLine("Fertig.");
 
             var transcript = result.Results[0].Alternatives[0];
 
-            string confidence = (transcript.Confidence * 100).ToString("F2");
+            string confidence = (transcript.Confidence * 100).ToString("F2", CultureInfo.CurrentCulture);
             string output = @$"_Ich bin mir zu {confidence}% sicher, dass folgendes gesagt wurde:_
                 
 {transcript.Transcript}";
-
+            Console.WriteLine(output);
             return output;
         }
 
@@ -196,7 +200,7 @@ namespace Bot_Dotnet
             {
                 if (message.ToLower().Contains(item.Searchstring))
                 {
-                    System.Console.WriteLine($"Found trigger {item.Searchstring}");
+                    Console.WriteLine($"Found trigger {item.Searchstring}");
                     return ((int)item.Id);
                 }
             }
@@ -220,7 +224,7 @@ namespace Bot_Dotnet
             var randomResultId = (new Random()).Next(responsesRaw.Count);
             var result = responsesRaw[randomResultId];
 
-            System.Console.WriteLine($"Got trigger id {triggerId}, returning response id {result.Id}");
+            Console.WriteLine($"Got trigger id {triggerId}, returning response id {result.Id}");
 
             return result.ResponseText;
         }
@@ -237,10 +241,8 @@ namespace Bot_Dotnet
                 chatId: message.Chat.Id,
                 messageId: message.MessageId,
                 text: newMessage.ToString(),
-                parseMode: Telegram.Bot.Types.Enums.ParseMode.Markdown
+                parseMode: ParseMode.Markdown
             );
-
         }
-
     }
 }
