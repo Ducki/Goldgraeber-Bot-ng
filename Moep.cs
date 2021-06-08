@@ -1,10 +1,17 @@
 using System.Linq;
 using System;
+using System.IO;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using System.Security.Cryptography;
 using Telegram.Bot.Types;
 using System.Text;
+using Telegram.Bot.Types.Enums;
+using System.Threading;
+using System.Threading.Tasks;
+using Google.Cloud.Speech.V1;
+using Google.LongRunning;
+using System.Globalization;
 
 namespace Bot_Dotnet
 {
@@ -12,14 +19,12 @@ namespace Bot_Dotnet
     {
         private TelegramBotClient botClient;
         private readonly string telegramApiToken;
-        private readonly string databaseFileName;
         public textContext databaseConnection;
         private Message lastSentMessage;
 
-        public Moep(string telegramApiToken, string databaseFileName)
+        public Moep(string telegramApiToken)
         {
             this.telegramApiToken = telegramApiToken;
-            this.databaseFileName = databaseFileName;
         }
 
         ~Moep()
@@ -62,6 +67,13 @@ namespace Bot_Dotnet
                     this.AppendToMessage(this.lastSentMessage, "moep!");
                     continue;
                 }
+
+                if (line.StartsWith("/processvoice"))
+                {
+
+                    //this.ProcessVoiceMessage();
+                    continue;
+                }
             }
 
             this.botClient.StopReceiving();
@@ -71,21 +83,111 @@ namespace Bot_Dotnet
         {
             System.Console.WriteLine($"{DateTime.Now} – Message in {e.Message.Chat.Title} / {e.Message.Chat.Id} from {e.Message.From.Username}: {e.Message.Text} ");
 
-            if (e.Message.Type != Telegram.Bot.Types.Enums.MessageType.Text)
-            {
-                System.Console.WriteLine("No text message, aborting …");
-                return;
-            }
+            // convert to switch
 
-            int triggerId = this.SearchTriggerInMessage(e.Message.Text) ?? 0;
+            switch (e.Message.Type)
+            {
+                case MessageType.Text:
+                    await this.ProcessTextMessage(e.Message);
+                    break;
+
+                case MessageType.Voice:
+                    await this.ProcessVoiceMessage(e.Message);
+                    break;
+                default:
+                    System.Console.WriteLine("No text message, aborting …");
+                    return;
+            }
+        }
+
+        private async Task ProcessTextMessage(Message message)
+        {
+            int triggerId = this.SearchTriggerInMessage(message.Text) ?? 0;
             if (triggerId == 0) return;
 
             string answer = GetRandomAnswerByTriggerId(triggerId);
-            Message message = await this.botClient.SendTextMessageAsync(e.Message.Chat, answer);
-            this.lastSentMessage = message;
 
-            // note for upcoming transscription of voice messages:
-            // https://github.com/TelegramBots/Telegram.Bot/blob/78e2573ca612270a6f29df8e4db3d10867ba859a/test/Telegram.Bot.Tests.Integ/Other/FileDownloadTests.cs#L79
+            Message lastMessage = await this.botClient.SendTextMessageAsync(message.Chat, answer);
+            this.lastSentMessage = lastMessage;
+        }
+
+        private async Task ProcessVoiceMessage(Message message)
+        {
+            /*
+                1. get file id: message.Voice.FileId
+                2. get temp file name: Path.GetTempFileName
+                3. Download file https://github.com/TelegramBots/Telegram.Bot/blob/78e2573ca612270a6f29df8e4db3d10867ba859a/test/Telegram.Bot.Tests.Integ/Other/FileDownloadTests.cs#L79
+                4. create google cloud voice api client
+                5. upload file
+                6. wait for callback
+                7. send transcribed text
+            */
+            var pathForTempFile = Path.GetTempFileName();
+            System.Console.WriteLine($"temp file: {pathForTempFile}");
+            System.Console.WriteLine($"File name: {message.Voice.FileId}");
+
+            using (FileStream fileStream = System.IO.File.OpenWrite(pathForTempFile))
+            {
+                Telegram.Bot.Types.File file = await this.botClient.GetInfoAndDownloadFileAsync(
+                                fileId: message.Voice.FileId,
+                                destination: fileStream
+                            );
+
+            }
+
+            this.botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
+
+            string transcript = this.CallCloudApi(pathForTempFile);
+
+            await this.botClient.SendTextMessageAsync(message.Chat,
+                                                transcript,
+                                                parseMode: ParseMode.Markdown,
+                                                replyToMessageId: message.MessageId);
+
+            System.IO.File.Delete(pathForTempFile);
+        }
+
+        private string CallCloudApi(string path)
+        {
+            System.Console.WriteLine("Baue Verbindung auf …");
+
+            SpeechClient speechClient = SpeechClient.Create();
+
+            LongRunningRecognizeRequest request = new()
+            {
+                Config = new RecognitionConfig()
+                {
+                    SampleRateHertz = 48000,
+                    Encoding = RecognitionConfig.Types.AudioEncoding.OggOpus,
+                    LanguageCode = "de_DE",
+                    Model = "default",
+                    UseEnhanced = true,
+                    MaxAlternatives = 1,
+                    EnableAutomaticPunctuation = true
+
+                },
+                Audio = RecognitionAudio.FromFile(path),
+            };
+
+            System.Console.WriteLine("Lade Memo hoch …");
+
+            Operation<LongRunningRecognizeResponse, LongRunningRecognizeMetadata> response = speechClient.LongRunningRecognize(request);
+
+            System.Console.WriteLine("Warte auf Texterkennung …");
+
+            Operation<LongRunningRecognizeResponse, LongRunningRecognizeMetadata> completedResponse = response.PollUntilCompleted();
+            LongRunningRecognizeResponse result = completedResponse.Result;
+
+            System.Console.WriteLine("Fertig.");
+
+            var transcript = result.Results[0].Alternatives[0];
+
+            string confidence = (transcript.Confidence * 100).ToString("F2");
+            string output = @$"_Ich bin mir zu {confidence}% sicher, dass folgendes gesagt wurde:_
+                
+{transcript.Transcript}";
+
+            return output;
         }
 
         private int? SearchTriggerInMessage(string message)
