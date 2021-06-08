@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-
 
 namespace Bot_Dotnet
 {
@@ -21,7 +19,7 @@ namespace Bot_Dotnet
                 token = args[0];
             }
 
-            Moep moep = new(token, "text.sqlite");
+            Moep moep = new(token);
 
             moep.Init();
             moep.InitTelegramClient();
