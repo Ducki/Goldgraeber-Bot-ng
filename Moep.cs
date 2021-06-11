@@ -1,17 +1,17 @@
-using System.Linq;
 using System;
+using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Google.Api.Gax.Grpc.GrpcNetClient;
+using Google.Cloud.Speech.V1;
+using Google.LongRunning;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
-using System.Text;
 using Telegram.Bot.Types.Enums;
-using System.Threading;
-using System.Threading.Tasks;
-using Google.Cloud.Speech.V1;
-using Google.LongRunning;
-using System.Globalization;
-using Google.Api.Gax.Grpc.GrpcNetClient;
 
 namespace Bot_Dotnet
 {
@@ -72,13 +72,8 @@ namespace Bot_Dotnet
                 if (line.StartsWith("/say"))
                 {
                     string[] words = line.Split(' ');
-                    Console.WriteLine(String.Join(' ', words));
-
                     var cid = new ChatId(Int32.Parse(words[1]));
                     string msg = line[(5 + words[1].Length)..];
-                    Console.WriteLine(Int32.Parse(words[1]));
-                    Console.WriteLine(msg);
-
                     _ = this.botClient.SendTextMessageAsync(cid, msg);
 
                     continue;
@@ -138,6 +133,8 @@ namespace Bot_Dotnet
 
             string transcript = this.CallCloudApi(pathForTempFile);
 
+            if (transcript is null) return;
+
             _ = await this.botClient.SendTextMessageAsync(message.Chat,
                                                 transcript,
                                                 parseMode: ParseMode.Markdown,
@@ -146,7 +143,7 @@ namespace Bot_Dotnet
             System.IO.File.Delete(pathForTempFile);
         }
 
-        private string CallCloudApi(string path)
+        private string? CallCloudApi(string path)
         {
             Console.WriteLine("Baue Verbindung auf …");
 
@@ -183,6 +180,11 @@ namespace Bot_Dotnet
             LongRunningRecognizeResponse result = completedResponse.Result;
 
             Console.WriteLine("Fertig.");
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(completedResponse));
+
+            Console.WriteLine($"Found {result.Results.Count} results");
+
+            if (result.Results.Count == 0) return "Verstehe ich leider nicht 🤷‍♂️";
 
             var transcript = result.Results[0].Alternatives[0];
 
