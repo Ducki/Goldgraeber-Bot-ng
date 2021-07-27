@@ -10,6 +10,7 @@ using Google.Cloud.Speech.V1;
 using Google.LongRunning;
 using Telegram.Bot;
 using Telegram.Bot.Args;
+using Telegram.Bot.Extensions.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
@@ -47,8 +48,9 @@ namespace Bot_Dotnet
 
         public void StartBot()
         {
-            this.botClient.OnMessage += HandleIncomingMessage;
-            this.botClient.StartReceiving();
+            using var cts = new CancellationTokenSource();
+
+            this.botClient.StartReceiving(new DefaultUpdateHandler(HandleUpdateAsync, HandleErrorAsync), cts.Token);
 
             Console.WriteLine("Listening to messages. Type quit to exit.");
             Console.WriteLine($"Culture: {Thread.CurrentThread.CurrentCulture}");
@@ -80,26 +82,31 @@ namespace Bot_Dotnet
                 }
             }
 
-            this.botClient.StopReceiving();
         }
 
-        private async void HandleIncomingMessage(object sender, MessageEventArgs e)
+        private async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-            Console.WriteLine($"{DateTime.Now} – Message in {e.Message.Chat.Title} / {e.Message.Chat.Id} from {e.Message.From.Username}: {e.Message.Text} ");
+            Console.WriteLine($"{DateTime.Now} – Message in {update.Message.Chat.Title} / {update.Message.Chat.Id} from {update.Message.From.Username}: {update.Message.Text} ");
 
-            switch (e.Message.Type)
+            switch (update.Message.Type)
             {
                 case MessageType.Text:
-                    await this.ProcessTextMessage(e.Message);
+                    await this.ProcessTextMessage(update.Message);
                     break;
 
                 case MessageType.Voice:
-                    await this.ProcessVoiceMessage(e.Message);
+                    await this.ProcessVoiceMessage(update.Message);
                     break;
                 default:
                     Console.WriteLine("No text message, aborting …");
-                    return;
+                    break;
             }
+        }
+
+        public static Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+        {
+            Console.WriteLine(exception.Message);
+            return Task.CompletedTask;
         }
 
         private async Task ProcessTextMessage(Message message)
